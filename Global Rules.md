@@ -1,19 +1,19 @@
 # Global Rules for Agents
 
-This document contains repeating rules and guidelines that agents must follow when working on tasks in the telegram-receiver application. These rules are extracted from task files across all phases and represent consistent patterns and requirements.
+This document contains universal rules and guidelines that agents must follow when working on any task, regardless of the repository, technology stack, or framework. These rules represent fundamental principles that apply across all projects and contexts.
 
 ## Table of Contents
 
 - [Definition of Done](#definition-of-done)
-- [Rails Conversion Rules](#rails-conversion-rules)
 - [Error Handling Rules](#error-handling-rules)
-- [Webhook Response Rules](#webhook-response-rules)
+- [Webhook and API Response Rules](#webhook-and-api-response-rules)
 - [Authentication Rules](#authentication-rules)
 - [Response Format Rules](#response-format-rules)
 - [Testing Rules](#testing-rules)
 - [Naming Conventions](#naming-conventions)
 - [Code Quality Rules](#code-quality-rules)
 - [Dependency Installation Rules](#dependency-installation-rules)
+- [Code Conversion Rules](#code-conversion-rules)
 
 ---
 
@@ -21,7 +21,7 @@ This document contains repeating rules and guidelines that agents must follow wh
 
 ### CODE/FILE WRITING TASKS
 
-**Description**: Tasks that involve writing, creating, modifying, or implementing SOURCE CODE FILES that need to be committed to git.
+**Description**: Tasks that involve writing, creating, modifying, or implementing SOURCE CODE FILES that need to be committed to version control.
 
 **Definition of Done**: "A Pull Request was created OR code was pushed to origin with the task complete"
 
@@ -41,44 +41,15 @@ This document contains repeating rules and guidelines that agents must follow wh
 
 **Important Notes**:
 - Installing dependencies requires packages to actually be installed successfully
-- Updating package.json is NOT enough
+- Updating dependency files (package.json, requirements.txt, Gemfile, etc.) is NOT enough
 - If the output mentions environmental issues, errors, warnings, or failed operations, the task is NOT complete
 
 **Examples**:
-- Installing npm packages, pip packages, gem dependencies
+- Installing packages (npm, pip, gem, cargo, etc.)
 - Running database migrations
 - Building/compiling projects
 - Setting up development environments
 - Running install scripts
-
----
-
-## Rails Conversion Rules
-
-### General Conversion Principles
-
-1. **Match Rails Implementation**: When converting from Rails, the TypeScript/Node.js implementation MUST match the Rails implementation behavior exactly, unless explicitly noted otherwise.
-
-2. **Reference Rails Files**: Always reference the Rails implementation files in `jarek-va/` to understand the expected behavior.
-
-3. **Preserve Functionality**: The conversion must preserve all functionality from the Rails version, including:
-   - Same webhook authentication mechanism
-   - Same request forwarding logic
-   - Same callback handling flow
-   - Same error handling approach
-   - Same local command processing
-
-4. **Method Name Conversions**:
-   - Rails `perform` method → TypeScript `process` method (for job handlers)
-   - Rails snake_case methods → TypeScript camelCase methods (e.g., `set_webhook` → `setWebhook`)
-   - Rails controller actions → TypeScript controller methods with camelCase
-
-5. **Data Structure Conversions**:
-   - Rails `with_indifferent_access` → Normalize object structure to allow both string and number key access
-   - Rails Hash → TypeScript object/interface
-   - Rails params → TypeScript `req.body` or `req.query`
-
-6. **Update Parsing**: Updates can come as either JSON strings or objects. Must parse if string using `JSON.parse()`, then normalize the object structure.
 
 ---
 
@@ -88,71 +59,67 @@ This document contains repeating rules and guidelines that agents must follow wh
 
 1. **Comprehensive Error Handling**: Errors should be logged with sufficient context, including:
    - Error message
-   - Stack trace
-   - Request context (request ID, user ID, operation)
+   - Stack trace (when available)
+   - Request context (request ID, user ID, operation, relevant identifiers)
 
 2. **Error Logging Format**: 
    - Use format: "Error in [ComponentName]: {error.message}" followed by full stack trace
-   - Use appropriate log levels (error, warn, info)
-   - Never log sensitive information (passwords, tokens, etc.)
+   - Use appropriate log levels (error, warn, info, debug)
+   - Never log sensitive information (passwords, tokens, API keys, personal data, etc.)
 
-3. **Error Re-throwing**: When handling errors in async handlers/jobs, must re-throw the original error after handling to mark the job as failed for retry logic.
+3. **Error Re-throwing**: When handling errors in async handlers, background jobs, or queue workers, re-throw the original error after handling to mark the job as failed for retry logic (if applicable).
 
-4. **Nested Error Handling**: When sending error messages fails, log the error but don't crash (handle nested errors gracefully).
+4. **Nested Error Handling**: When error notification mechanisms fail, log the error but don't crash (handle nested errors gracefully).
+
+5. **Error Context Preservation**: Preserve error context through the call stack to enable effective debugging.
 
 ### User Notification
 
-1. **Notify Users on Errors**: When errors occur during user-facing operations, attempt to notify the user via Telegram if `chat_id` is available.
+1. **Notify Users on Errors**: When errors occur during user-facing operations, attempt to notify the user through available channels if user identifiers are available.
 
-2. **Error Message Format**: Use format: "Sorry, I encountered an error processing your message: {error.message}"
+2. **Error Message Format**: Use user-friendly error messages that explain what went wrong without exposing internal implementation details.
 
-3. **Chat ID Check**: Use truthy check (not null, not undefined, not empty string) equivalent to Rails' `.present?` method before attempting to send error messages.
+3. **User Identifier Check**: Verify that user identifiers are valid (not null, not undefined, not empty) before attempting to send error messages.
 
-4. **Missing Chat ID**: If `chat_id` is not available, do not attempt to send error message.
+4. **Missing User Context**: If user identifiers are not available, do not attempt to send error messages to users.
 
 ---
 
-## Webhook Response Rules
+## Webhook and API Response Rules
 
-### Telegram Webhook Responses
+### Webhook Response Principles
 
-1. **ALWAYS Return 200 OK**: Webhook endpoints MUST always return 200 OK to Telegram, even when errors occur. This prevents Telegram from retrying the webhook.
+1. **ALWAYS Return 200 OK for Webhooks**: Webhook endpoints MUST always return 200 OK to the webhook provider, even when errors occur. This prevents the provider from retrying the webhook unnecessarily.
 
-2. **Immediate Response**: Webhook should return 200 OK immediately, before async handler processing completes.
+2. **Immediate Response**: Webhooks should return 200 OK immediately, before async handler processing completes.
 
 3. **Error Handling**: Even if webhook processing fails, the endpoint must return 200 OK. Errors should be logged and users notified if possible, but the HTTP response must be 200.
 
 4. **Response Timing**: The webhook endpoint should respond synchronously, while actual processing happens asynchronously.
 
-### Callback Query Handling
+### Callback and Acknowledgment Handling
 
-1. **Answer Before Processing**: Callback queries must be answered before processing the callback.
+1. **Acknowledge Before Processing**: Callback queries and similar acknowledgment-required operations must be acknowledged before processing the callback.
 
-2. **Error Handling**: If answering the callback query fails, log the error but continue processing the callback.
+2. **Error Handling**: If acknowledgment fails, log the error but continue processing the callback when possible.
 
 ---
 
 ## Authentication Rules
 
-### Webhook Authentication
+### Authentication Principles
 
-1. **Telegram Webhook Authentication**:
-   - Header: `X-Telegram-Bot-Api-Secret-Token`
-   - Environment variable: `TELEGRAM_WEBHOOK_SECRET`
-   - If expected secret is blank (not configured), allow the request (development mode)
+1. **Secret-Based Authentication**:
+   - Use environment variables for storing secrets
+   - Validate secrets from headers, query parameters, or request body as appropriate
+   - If expected secret is blank (not configured), allow the request in development mode only
    - If secret is configured and doesn't match, return 401 Unauthorized
 
-2. **Admin Authentication**:
-   - Header: `X-Admin-Secret`
-   - Alternative sources: `HTTP_X_ADMIN_SECRET` env variable, `admin_secret` query parameter, `admin_secret` body parameter
-   - Environment variable: `WEBHOOK_SECRET`
-   - Must match exactly, return 401 Unauthorized if mismatch
+2. **Header Normalization**: Be aware of framework-specific header normalization (e.g., some frameworks normalize headers to lowercase). Access headers consistently based on framework conventions.
 
-3. **Cursor Runner Webhook Authentication**:
-   - Header: `X-Webhook-Secret` or `X-Cursor-Runner-Secret`
-   - Validate against configured secret
+3. **Multiple Authentication Sources**: Support multiple sources for authentication (headers, query parameters, body parameters) when appropriate, but prioritize security (headers > query > body).
 
-4. **Express Header Normalization**: Express normalizes header names to lowercase, so use lowercase when accessing headers (e.g., `req.headers['x-admin-secret']`).
+4. **Environment-Specific Behavior**: Authentication behavior may differ between development and production environments. Document and implement accordingly.
 
 ---
 
@@ -160,74 +127,36 @@ This document contains repeating rules and guidelines that agents must follow wh
 
 ### Success Response Formats
 
-1. **Standard Success Format** (`{ ok: true, ... }`):
-   - Used by most controllers for standard API responses
-   - Used by: `TelegramController`, `AgentToolsController`
+1. **Consistent Success Indicators**: Use consistent success indicators across the application (e.g., `ok: true`, `success: true`, `status: 'success'`). Choose one pattern and use it consistently.
 
-2. **Service Response Format** (`{ success: true, ... }`):
-   - Used when proxying responses directly from external services
-   - Used by: `CursorRunnerController`
+2. **Health Check Format**: Health check endpoints should return a consistent format indicating service status, name, and version.
 
-3. **Health Check Format** (`{ status: 'healthy', service: ..., version: ... }`):
-   - Used for health check endpoints
-   - Status value MUST be `"healthy"` (not "ok")
-   - Service name from `process.env.APP_NAME` or default `'Virtual Assistant API'`
-   - Version from `process.env.APP_VERSION` or default `'1.0.0'`
-
-4. **Callback Acknowledgment Format** (`{ received: true, ... }`):
-   - Used for webhook callback acknowledgments
-   - Used by: `CursorRunnerCallbackController`
-
-5. **Empty Response with Status Code**:
-   - Used for webhook endpoints that must respond immediately
-   - Return `res.sendStatus(200)` or `res.status(200).end()`
+3. **Empty Response with Status Code**: For webhook endpoints that must respond immediately, return appropriate status codes without body content.
 
 ### Error Response Formats
 
-1. **Global Error Handler Format**:
-   ```json
-   {
-     "ok": false,
-     "say": "Sorry, I encountered an error processing your request.",
-     "result": {
-       "error": "Error message here"
-     }
-   }
-   ```
+1. **Consistent Error Format**: Use a consistent error response format across all endpoints. Include:
+   - Error indicator (e.g., `ok: false`, `success: false`)
+   - Error message
+   - Optional error details or result object
 
-2. **Controller-Level Error Format**:
-   ```json
-   {
-     "ok": false,
-     "error": "Error message here"
-   }
-   ```
+2. **User-Friendly Messages**: Error messages should be user-friendly and not expose internal implementation details.
 
-3. **Service-Level Error Format**:
-   ```json
-   {
-     "success": false,
-     "error": "Error message here"
-   }
-   ```
-
-4. **Simple Error Format** (for authentication/validation):
-   ```json
-   {
-     "error": "Unauthorized"
-   }
-   ```
+3. **Structured Error Responses**: Use structured error responses that allow clients to programmatically handle errors.
 
 ### HTTP Status Codes
 
 Use the following HTTP status codes consistently:
 
 - **200 OK**: Successful operations
-- **400 Bad Request**: Validation errors, missing required parameters
+- **400 Bad Request**: Validation errors, missing required parameters, malformed requests
 - **401 Unauthorized**: Authentication failures (missing or invalid credentials)
-- **422 Unprocessable Entity**: Service-level validation failures (e.g., invalid repository name)
+- **403 Forbidden**: Authorization failures (valid credentials but insufficient permissions)
+- **404 Not Found**: Resource not found
+- **422 Unprocessable Entity**: Service-level validation failures
 - **500 Internal Server Error**: Unhandled exceptions, unexpected errors
-- **502 Bad Gateway**: External service errors (e.g., CursorRunnerService connection failures)
+- **502 Bad Gateway**: External service errors or connection failures
+- **503 Service Unavailable**: Service temporarily unavailable
 
 ---
 
@@ -235,162 +164,158 @@ Use the following HTTP status codes consistently:
 
 ### Test Organization
 
-1. **Test Location**:
-   - Unit tests: `tests/unit/` (mirrors `src/` structure)
-   - Integration tests: `tests/integration/api/` for API endpoints
-   - E2E tests: `tests/e2e/` for end-to-end tests
+1. **Test Location**: Organize tests in a clear structure that mirrors the source code organization:
+   - Unit tests: Test individual components in isolation
+   - Integration tests: Test multiple components working together
+   - E2E tests: Test complete user flows
 
-2. **Test Framework**:
-   - Use Jest with Supertest for HTTP endpoint testing
-   - Use Playwright for E2E tests (when applicable)
-   - E2E tests for backend API should use Supertest (not Playwright)
+2. **Test Framework**: Use appropriate testing frameworks for the technology stack. Ensure tests are:
+   - Fast and reliable
+   - Easy to maintain
+   - Well-documented
 
 3. **Test Structure**:
-   - Group tests by endpoint or component
-   - Use nested contexts for different scenarios (with/without auth, different update types, error cases)
+   - Group tests by component or feature
+   - Use nested contexts for different scenarios (with/without auth, different input types, error cases)
    - Test both success and error paths
 
 ### Test Requirements
 
 1. **Mock External Dependencies**: External services should be mocked to ensure test isolation and speed.
 
-2. **Test Fixtures**: Use existing fixtures from `tests/fixtures/` for consistent test data.
+2. **Test Fixtures**: Use consistent test fixtures for predictable test data.
 
 3. **Test Coverage**: Tests should verify:
-   - All endpoint behaviors
-   - Authentication scenarios
+   - All endpoint/function behaviors
+   - Authentication and authorization scenarios
    - Error handling paths
-   - Update type variations (message, edited_message, callback_query)
-   - Async handler execution
+   - Input validation
+   - Edge cases
 
-4. **Integration Tests**: Should test multiple components together (e.g., controller + async handler execution).
+4. **Integration Tests**: Should test multiple components together to verify they work correctly in combination.
 
-5. **E2E Tests**: Should verify the complete flow from webhook receipt to Telegram response.
+5. **E2E Tests**: Should verify complete flows from input to output.
 
 ---
 
 ## Naming Conventions
 
+### General Naming Principles
+
+1. **Consistency**: Follow the naming conventions established in the codebase. When working with existing code, match existing patterns.
+
+2. **Clarity**: Use descriptive names that clearly indicate purpose and intent.
+
+3. **Language Conventions**: Follow the conventions of the programming language being used:
+   - camelCase for variables and functions (JavaScript, Java, C#)
+   - snake_case for variables and functions (Python, Ruby)
+   - PascalCase for classes and types
+   - UPPER_SNAKE_CASE for constants
+
 ### File Naming
 
-1. **Controllers**: `*.controller.ts` (e.g., `health.controller.ts`)
-2. **Routes**: `*.routes.ts` (e.g., `health.routes.ts`)
-3. **Middleware**: `*.middleware.ts` (e.g., `error-handler.middleware.ts`)
-4. **Services**: `*.service.ts` (e.g., `telegram.service.ts`)
-5. **Models**: `*.model.ts` or singular noun (e.g., `user.model.ts`)
-6. **Types**: `*.ts` with descriptive names (e.g., `telegram.ts`, `cursor-runner.ts`)
-7. **Utils**: `*.ts` with descriptive names (e.g., `logger.ts`)
-8. **Test Files**: `*.test.ts` for unit/integration tests, `*.spec.ts` for E2E tests
+1. **Consistent Patterns**: Use consistent file naming patterns that reflect the file's purpose and type.
 
-### Code Naming
+2. **Framework Conventions**: Follow framework-specific naming conventions when applicable.
 
-1. **Use kebab-case** for file names (e.g., `error-handler.middleware.ts`)
-2. **Use camelCase** for TypeScript identifiers (variables, functions, methods)
-3. **Use PascalCase** for class names and type names
-4. **Use UPPER_SNAKE_CASE** for constants and environment variables
-5. **Use snake_case** for route paths (e.g., `set_webhook`, `webhook_info`)
-6. **Use camelCase** for method names (TypeScript convention)
+3. **Test Files**: Use consistent naming for test files (e.g., `*.test.*`, `*_test.*`, `*.spec.*`).
 
 ### Route Path Naming
 
-1. **Use snake_case** for route paths (e.g., `set_webhook`, `webhook_info`)
-2. **Use kebab-case** for multi-word route segments (e.g., `/cursor-runner`, `/agent-tools`)
-3. **Use descriptive names** that clearly indicate the endpoint's purpose
-4. **Follow RESTful conventions** where applicable
+1. **RESTful Conventions**: Follow RESTful conventions where applicable.
+
+2. **Consistent Separators**: Use consistent separators (hyphens, underscores, or camelCase) for multi-word route segments.
+
+3. **Descriptive Names**: Use descriptive names that clearly indicate the endpoint's purpose.
 
 ---
 
 ## Code Quality Rules
 
-### TypeScript Rules
+### Type Safety and Validation
 
-1. **Type Safety**: Use TypeScript types and interfaces for all data structures
-2. **Avoid `any` Types**: Use proper generic constraints instead of `any` types
-3. **Optional Fields**: Mark optional fields with `?` in TypeScript interfaces
-4. **Required Fields**: Do not mark required fields with `?`
+1. **Type Safety**: Use type systems (TypeScript, type hints, etc.) when available to catch errors at compile time.
+
+2. **Input Validation**: Validate all inputs at system boundaries (API endpoints, function parameters, user input).
+
+3. **Avoid Unsafe Types**: Avoid using `any`, `Object`, or similar unsafe types when type-safe alternatives exist.
 
 ### Code Organization
 
 1. **Separation of Concerns**:
-   - Controllers: HTTP concerns only (delegate to services)
-   - Services: Business logic and external integrations
-   - Routes: Only define URL patterns and map to controllers
-   - Middleware: Cross-cutting concerns without business logic
-   - Utils: Pure functions and helpers
+   - Separate HTTP/API concerns from business logic
+   - Separate business logic from data access
+   - Keep utilities and helpers separate from domain logic
+   - Use middleware for cross-cutting concerns
 
 2. **Dependency Injection**: 
    - Pass dependencies as function parameters or constructor arguments
-   - No global state or singletons (except for logger, which is a utility)
+   - Avoid global state and singletons when possible
+   - Make dependencies explicit and testable
 
 3. **Async/Await Pattern**:
-   - All asynchronous operations use `async/await` syntax
-   - Promises are properly handled with error catching
-   - Use Node.js native async/await (no queue system needed)
+   - Use appropriate async patterns for the language/framework
+   - Handle promises and async operations properly
+   - Ensure proper error handling in async code
 
 ### Error Handling in Code
 
-1. **Typed Errors**: Services throw typed errors that controllers catch and handle appropriately
-2. **Error Classes**: Define custom error classes in `src/errors/` for application-specific errors
-3. **Error Middleware**: Errors are caught at the middleware level
-4. **Error Response Format**: Error responses follow a consistent format matching Rails error responses
+1. **Typed Errors**: Use typed errors or error classes for application-specific errors when possible.
+
+2. **Error Propagation**: Errors should be caught at appropriate levels and handled or re-thrown as needed.
+
+3. **Error Middleware**: Use error middleware or global error handlers to centralize error handling.
 
 ---
 
 ## Dependency Installation Rules
 
-1. **Complete Installation Required**: Installing dependencies requires packages to actually be installed successfully. Updating package.json is NOT enough.
+1. **Complete Installation Required**: Installing dependencies requires packages to actually be installed successfully. Updating dependency files is NOT enough.
 
 2. **No Errors Allowed**: The installation must complete successfully with no errors. If any part of the operation fails, the task is NOT complete.
 
 3. **Check Output**: If the output mentions environmental issues, errors, warnings, or failed operations, the task is NOT complete.
 
-4. **Verify Installation**: After installation, verify that packages are actually installed (check `node_modules/` or run package commands).
+4. **Verify Installation**: After installation, verify that packages are actually installed (check package directories or run package commands).
 
 ---
 
-## Additional Rules
+## Code Conversion Rules
 
-### Update Processing
+### General Conversion Principles
 
-1. **Update Types**: Handle all Telegram update types:
-   - `message` (command and non-command messages)
-   - `edited_message` (edited text messages)
-   - `callback_query` (button callback queries)
-   - Unhandled update types (should still return 200 and process)
+1. **Preserve Functionality**: When converting code from one language or framework to another, preserve all functionality exactly, unless explicitly noted otherwise.
 
-2. **Update Filtering**: Filter out Express-specific params before processing (similar to Rails filtering `controller`, `action`, `format`, `telegram`).
+2. **Reference Original Implementation**: Always reference the original implementation to understand expected behavior.
 
-3. **Chat Info Extraction**: Extract chat information from different update types (message, edited_message, callback_query) for error handling.
+3. **Match Behavior**: The converted implementation MUST match the original implementation behavior exactly, including:
+   - Same authentication mechanisms
+   - Same request/response handling logic
+   - Same error handling approach
+   - Same business logic flow
 
-### Audio Processing
+4. **Naming Conventions**: Convert naming conventions to match the target language/framework conventions (e.g., snake_case to camelCase, or vice versa).
 
-1. **Audio Response**: When original message was audio, should respond with audio (if audio output not disabled).
+5. **Data Structure Conversions**: Convert data structures appropriately for the target language while preserving functionality.
 
-2. **Audio Transcription Error**: Should send error message to user and return early.
-
-3. **Audio Generation Error**: Should fallback to text message if text-to-speech fails.
-
-### Debug Mode
-
-1. **CURSOR_DEBUG Acknowledgment**: Should send acknowledgment message when debug enabled.
-
-2. **Debug Logging**: Use appropriate logging levels for debug information.
+6. **Framework-Specific Patterns**: Adapt framework-specific patterns (e.g., Rails controllers to Express routes, Django views to Flask routes) while maintaining the same behavior.
 
 ---
 
 ## Summary
 
-These rules represent the consistent patterns and requirements found across all task files in the telegram-receiver application. Agents must follow these rules when:
+These rules represent fundamental principles that apply across all projects, repositories, and technology stacks. Agents must follow these rules when:
 
 - Implementing new features
-- Converting Rails code to TypeScript/Node.js
+- Converting code between languages or frameworks
 - Writing tests
 - Handling errors
 - Implementing authentication
 - Formatting responses
 - Organizing code
+- Installing dependencies
 
-When in doubt, refer to the Rails implementation in `jarek-va/` for behavior reference, and follow the patterns established in the existing TypeScript codebase.
+When working on a specific project, also follow any project-specific conventions and patterns established in that codebase. These global rules provide the foundation, while project-specific rules provide the context.
 
 
 
