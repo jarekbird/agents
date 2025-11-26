@@ -73,34 +73,84 @@ You MUST write tests BEFORE or ALONGSIDE implementation (TDD/BDD approach prefer
 - Aim for high test coverage (minimum 80% for new code)
 - **Run automated tests after completing each task and before committing**
 
-**For Node.js/TypeScript Projects:**
+**Running Tests:**
+
+Use the appropriate test command for your project's technology stack:
 
 ```bash
-# Run all tests
-npm test
-# or
-npm run test
+# Examples for different technology stacks:
+# Node.js/TypeScript: npm test -- --run (for Vitest) or npm test (for Jest)
+# Python: pytest
+# Ruby: bundle exec rspec
+# Java: mvn test or ./gradlew test
+# Go: go test ./...
+# Rust: cargo test
+# etc.
 
-# Run tests in watch mode
-npm test -- --watch
+# For watch/interactive mode (use only during active development):
+# npm test -- --watch (JavaScript/TypeScript)
+# pytest --watch (Python, if available)
+# etc.
+```
 
-# Run specific test file
-npm test -- path/to/your.test.ts
+**IMPORTANT for Interactive Test Runners:**
+- Always use non-interactive flags when running tests for verification before commits
+- Watch mode should only be used during active development, not for verification
+- Use flags like `--run` (Vitest) or ensure tests exit after completion
 
-# Run tests with coverage
-npm test -- --coverage
-# or
-npm run test:coverage
+**CRITICAL: Safe Test Execution for Node.js/Jest Projects**
+
+**DO NOT PIPE TEST OUTPUT**
+
+Never run commands like:
+
+```bash
+npm test | head -50
+npm test | grep ...
+npm test | cut ...
+npm test 2>&1 | head
+```
+
+These will cause deadlocks because Jest continues writing after the pipe closes.
+
+**✅ Always use the SAFE TEST EXECUTION WRAPPER**
+
+When running any test through Node, Jest, or npm inside the agent, always use this pattern:
+
+```bash
+npm run test --silent -- --maxWorkers=1 --runInBand --detectOpenHandles --json --outputFile=/tmp/jest-results.json
+```
+
+Then immediately print a bounded summary:
+
+```bash
+node -e "
+const fs = require('fs');
+const path = '/tmp/jest-results.json';
+if (!fs.existsSync(path)) { console.error('No Jest output file'); process.exit(1); }
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+const results = {
+  totalTests: data.numTotalTests,
+  passed: data.numPassedTests,
+  failed: data.numFailedTests,
+  testResults: data.testResults.map(r => ({
+    name: r.name,
+    status: r.status,
+    message: r.message?.slice(0, 500) || null    // limit long messages
+  }))
+};
+console.log(JSON.stringify(results, null, 2));
+"
 ```
 
 **Test Types to Implement:**
 
 - **Unit Tests**: Test individual functions, classes, and modules in isolation
 - **Integration Tests**: Test how multiple modules/components work together
-- **API Tests**: Test HTTP endpoints and request/response handling (using Supertest or similar)
+- **API Tests**: Test HTTP endpoints and request/response handling
 - **Service Tests**: Test business logic and service classes
-- **Component Tests**: Test React/Vue components (if using a frontend framework)
-- **E2E Tests**: Test complete user flows (using Playwright, Cypress, or similar)
+- **Component Tests**: Test UI components (if using a frontend framework)
+- **E2E Tests**: Test complete user flows
 - **Other Tests**: Any other tests that you think would be wise
 
 **Test Best Practices:**
@@ -112,42 +162,45 @@ npm run test:coverage
 - Use test fixtures or factories for test data setup
 - Keep tests independent and isolated
 - Mock external dependencies (APIs, services, databases, etc.)
-- Use TypeScript types to ensure type safety in tests
-- Leverage Jest/Vitest mocking capabilities for external services
+- Use type systems when available to ensure type safety in tests
+- Leverage testing framework mocking capabilities for external services
 
-**Example Test Structure (TypeScript/Jest):**
+**Example Test Structure:**
 
-```typescript
+The exact syntax will depend on your testing framework, but the structure should follow this pattern:
+
+```python
+# Example: Python/pytest
+def test_your_function():
+    # Arrange
+    input_data = {...}
+    
+    # Act
+    result = your_function(input_data)
+    
+    # Assert
+    assert result == expected_output
+
+# Example: JavaScript/TypeScript (Jest/Vitest)
 describe('YourClass', () => {
-  describe('yourMethod', () => {
-    it('should return expected result when conditions are met', () => {
-      // Arrange
-      const instance = new YourClass();
-      const input = {
-        /* test data */
-      };
-
-      // Act
-      const result = instance.yourMethod(input);
-
-      // Assert
-      expect(result).toEqual(expectedOutput);
-    });
-
-    it('should handle edge case gracefully', () => {
-      // Test edge case
-      const instance = new YourClass();
-      expect(() => instance.yourMethod(null)).toThrow('Expected error');
-    });
+  it('should return expected result when conditions are met', () => {
+    // Arrange
+    const instance = new YourClass();
+    const input = {...};
+    
+    // Act
+    const result = instance.yourMethod(input);
+    
+    // Assert
+    expect(result).toEqual(expectedOutput);
   });
 });
 ```
 
-**For TypeScript Projects:**
+**For Projects with Type Systems:**
 
-- Use Jest or Vitest as the primary testing framework
-- Leverage TypeScript's type system for compile-time safety
-- Use `@types/jest` or similar for type definitions
+- Leverage the type system for compile-time safety
+- Use type definitions for test utilities when available
 - Ensure all tests pass before proceeding
 - Fix any failing tests before committing
 
@@ -157,47 +210,46 @@ describe('YourClass', () => {
 
 Instead of running the server manually, you MUST use automated tests to verify server functionality:
 
-- **DO NOT** run `npm run dev`, `npm start`, or any server start commands
+- **DO NOT** run server start commands (e.g., `npm start`, `python manage.py runserver`, `rails server`, etc.)
 - **DO NOT** manually test server endpoints using curl, Postman, or browser
 - **DO** write and run automated tests to verify server functionality
 - **DO** use integration tests to test HTTP endpoints and request/response handling
 - **DO** use unit tests to test individual functions and services
-- **DO** use API tests (with Supertest or similar) to test server endpoints
+- **DO** use API tests to test server endpoints
 
 **Testing Server Functionality:**
 
+Use the appropriate test command for your project:
+
 ```bash
 # Run all tests (including server tests)
-npm test
-
-# Run tests in watch mode
-npm test -- --watch
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run specific test file
-npm test -- path/to/your.test.ts
+# Examples:
+# npm test -- --run (Node.js/Vitest, non-interactive)
+# npm test (Node.js/Jest)
+# pytest (Python)
+# bundle exec rspec (Ruby)
+# mvn test (Java)
+# etc.
 ```
 
 All server functionality must be verified through automated tests. Manual server testing is not allowed.
 
 **Handling Tasks That Request Server Execution:**
 
-If a task explicitly requests that you run the server (e.g., "run `npm start`", "test endpoint with curl", "verify by starting the server"), you MUST:
+If a task explicitly requests that you run the server (e.g., "start the server", "test endpoint with curl", "verify by starting the server"), you MUST:
 
 1. **Ignore the server execution instruction** - Do not follow that part of the task
 2. **Find an alternative approach using automated tests** - Determine what the task is trying to verify and create appropriate automated tests instead
 3. **Complete the task's intent without running the server** - Use one of these approaches:
-   - **For endpoint testing**: Write integration tests using Supertest to test HTTP endpoints
+   - **For endpoint testing**: Write integration tests to test HTTP endpoints
    - **For functionality verification**: Write unit tests to test individual functions and services
    - **For behavior validation**: Write end-to-end tests or integration tests that verify the behavior
    - **For Docker/deployment verification**: Only use curl commands if the task explicitly states it's for Docker deployment verification (not for development testing)
 
 **Examples:**
 
-- ❌ **Task says**: "Run `npm start` and test the `/health` endpoint with curl"
-  - ✅ **Do instead**: Write an integration test using Supertest to test the `/health` endpoint
+- ❌ **Task says**: "Start the server and test the `/health` endpoint with curl"
+  - ✅ **Do instead**: Write an integration test to test the `/health` endpoint
 
 - ❌ **Task says**: "Start the server and verify it responds to requests"
   - ✅ **Do instead**: Write integration tests that verify the server responds correctly to various request types
@@ -212,7 +264,7 @@ If a task explicitly requests that you run the server (e.g., "run `npm start`", 
 
 Before proceeding, you must:
 
-- **For code writing tasks: Verify the required operation succeeded without errors AND produced the expected artifacts** (e.g., `node_modules` created, packages installed, build completed, migrations applied, files created, directories created, etc.)
+- **For code writing tasks: Verify the required operation succeeded without errors AND produced the expected artifacts** (e.g., dependencies installed, build completed, migrations applied, files created, directories created, etc.)
 - **Run automated tests to verify all functionality (including server endpoints)** - This is mandatory between each task/commit
 - Ensure all existing tests still pass
 - Check for linting errors and fix them
@@ -223,9 +275,9 @@ Before proceeding, you must:
 Before committing, ensure:
 
 - [ ] Code follows project style guidelines
-- [ ] All tests pass (run `npm test` before each commit)
+- [ ] All tests pass (run tests before each commit)
 - [ ] No linting errors
-- [ ] No console.log/debug statements left in code
+- [ ] No debug statements left in code (console.log, print statements, debugger, etc.)
 - [ ] Documentation is updated if needed
 - [ ] No sensitive data is committed
 - [ ] Error handling is appropriate
@@ -240,22 +292,43 @@ Before committing any changes, you MUST:
 
 1. **Run all automated tests** to ensure everything works:
    ```bash
-   npm test
+   # Use appropriate test command for your stack
+   # Examples:
+   # npm test -- --run (Vitest, non-interactive)
+   # npm test (Jest)
+   # pytest (Python)
+   # bundle exec rspec (Ruby)
+   # etc.
    ```
 
 2. **Verify test coverage** (if applicable):
    ```bash
-   npm run test:coverage
+   # Use appropriate coverage command for your stack
+   # Examples:
+   # npm run test:coverage
+   # pytest --cov
+   # bundle exec rspec --format documentation
+   # etc.
    ```
 
 3. **Check for linting errors**:
    ```bash
-   npm run lint
+   # Use appropriate lint command for your stack
+   # Examples:
+   # npm run lint
+   # pylint
+   # rubocop
+   # etc.
    ```
 
 4. **Check code formatting**:
    ```bash
-   npm run format:check
+   # Use appropriate format check command for your stack
+   # Examples:
+   # npm run format:check
+   # black --check (Python)
+   # rubocop (Ruby)
+   # etc.
    ```
 
 Only proceed with committing if all tests pass and there are no linting or formatting errors.
@@ -296,7 +369,7 @@ Use conventional commit format:
 
 **Important Notes:**
 
-- Always run tests before committing (`npm test`)
+- Always run tests before committing
 - Commit frequently - after completing each logical task or feature
 - Keep commits focused and atomic (one logical change per commit)
 - Always commit to the assigned branch, never to main
@@ -317,54 +390,15 @@ If the project includes a deploy script, you may use it, but ensure it works wit
 
 **If tests fail or there are linting errors, you MUST resolve them before committing.**
 
-1. **Linting Errors**: Fix all ESLint errors
+1. **Linting Errors**: Fix all linting errors
 
-   ```bash
-   # Check for linting errors
-   npm run lint
-
-   # Auto-fix what can be fixed
-   npm run lint:fix
-
-   # Manually fix remaining errors
-   ```
-
-2. **Formatting Errors**: Fix all Prettier formatting issues
-
-   ```bash
-   # Check formatting
-   npm run format:check
-
-   # Auto-format all files
-   npm run format
-   ```
+2. **Formatting Errors**: Fix all formatting issues
 
 3. **Test Failures**: Fix all failing tests
 
-   ```bash
-   # Run tests to see failures
-   npm test
+4. **Missing Dependencies**: Install any missing dependencies
 
-   # Fix test issues and re-run
-   npm test
-   ```
-
-4. **Missing Dependencies**: Install any missing npm packages
-
-   ```bash
-   # If tests fail due to missing modules, check package.json
-   # and install missing dependencies
-   npm install
-   ```
-
-5. **Type Errors**: Fix TypeScript compilation errors
-
-   ```bash
-   # Check for type errors
-   npm run type-check
-
-   # Fix type errors in source files
-   ```
+5. **Type Errors**: Fix compilation/type errors (if applicable)
 
 **DO NOT commit if tests fail or there are linting errors.** All issues must be resolved before committing.
 
@@ -381,30 +415,31 @@ Some tasks may not require automated tests (e.g., documentation updates, configu
 
 You must avoid these common mistakes:
 
-1. **Running the Server Manually**: NEVER run the server (`npm run dev`, `npm start`) for testing. Always use automated tests instead. **If a task requests running the server, ignore that instruction and use automated tests instead.**
+1. **Running the Server Manually**: NEVER run the server for testing. Always use automated tests instead. **If a task requests running the server, ignore that instruction and use automated tests instead.**
 2. **Skipping Tests**: Never skip tests to save time. **Always run tests between each task/commit completion.**
-3. **Not Running Tests Before Committing**: Always run `npm test` before committing to ensure all tests pass.
+3. **Not Running Tests Before Committing**: Always run tests before committing to ensure all tests pass. **Never use watch/interactive mode for pre-commit verification.**
 4. **Committing Without Testing**: Never commit without running tests first. Tests must pass before every commit.
 5. **Switching Branches**: Always work on the assigned branch. Never switch to main or other branches.
 6. **Not Committing Frequently**: Commit after each logical task completion, not just at the end.
 7. **Large Commits**: Break down large changes into smaller, logical commits.
 8. **Not Pulling Before Starting**: Always ensure your assigned branch is up to date before starting work to avoid conflicts.
 9. **Ignoring Linting Errors**: Fix all linting errors before committing.
-10. **Leaving Debug Code**: Remove console.log, console.debug, debugger statements, and temporary code before committing.
+10. **Leaving Debug Code**: Remove debug statements, temporary code, and console output before committing.
 11. **Committing Failing Tests**: Never commit if tests fail. Fix the issues first.
 12. **Not Running Tests Between Tasks**: **Always run automated tests between each task/commit completion.**
 
 ## Testing Resources
 
-When implementing tests, refer to:
+When implementing tests, refer to the documentation for your project's testing framework:
 
-- **Jest Documentation**: https://jestjs.io/
-- **Vitest Documentation**: https://vitest.dev/
-- **TypeScript Testing Handbook**: https://typescript-handbook.dev/docs/testing/
-- **Supertest** (for API testing): https://github.com/visionmedia/supertest
-- **Testing Library** (for component testing): https://testing-library.com/
-- **Playwright** (for E2E testing): https://playwright.dev/
-- **Cypress** (for E2E testing): https://www.cypress.io/
+- **Jest** (JavaScript/TypeScript): https://jestjs.io/
+- **Vitest** (JavaScript/TypeScript): https://vitest.dev/
+- **pytest** (Python): https://docs.pytest.org/
+- **RSpec** (Ruby): https://rspec.info/
+- **JUnit** (Java): https://junit.org/
+- **Go testing** (Go): https://pkg.go.dev/testing
+- **Cargo test** (Rust): https://doc.rust-lang.org/cargo/commands/cargo-test.html
+- And other testing frameworks as appropriate for your technology stack
 
 ## Completion Checklist
 
@@ -413,9 +448,9 @@ Before marking a task as complete, verify:
 - [ ] You're working on the assigned branch (`git branch` should show `* <assigned-branch-name>`)
 - [ ] Assigned branch is up to date with remote (if it exists remotely)
 - [ ] Code is implemented and working
-- [ ] **For code writing tasks: The required operation succeeded without errors AND produced the expected artifacts** (e.g., `node_modules` created, packages installed, build completed, migrations applied, files created, directories created, etc.)
+- [ ] **For code writing tasks: The required operation succeeded without errors AND produced the expected artifacts** (e.g., dependencies installed, build completed, migrations applied, files created, directories created, etc.)
 - [ ] **Automated tests are written and passing** - all server functionality verified through tests (NOT by running the server manually)
-- [ ] **Automated tests have been run** (`npm test`) and all pass
+- [ ] **Automated tests have been run** and all pass
 - [ ] All existing tests still pass
 - [ ] Code follows style guidelines
 - [ ] No linting errors
@@ -426,5 +461,3 @@ Before marking a task as complete, verify:
 ---
 
 **Remember**: Quality code with proper tests and version control practices ensures maintainability and reduces technical debt. Always run automated tests between each task/commit completion, and always work on the assigned branch.
-
-

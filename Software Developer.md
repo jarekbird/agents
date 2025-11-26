@@ -66,34 +66,74 @@ You MUST write tests BEFORE or ALONGSIDE implementation (TDD/BDD approach prefer
 - Bug fixes must include tests that verify the fix
 - Aim for high test coverage (minimum 80% for new code)
 
-**For Node.js/TypeScript Projects:**
+**Running Tests:**
+
+Use the appropriate test command for your project's technology stack:
 
 ```bash
-# Run all tests
-npm test
-# or
-npm run test
+# Examples for different technology stacks:
+# Node.js/TypeScript: npm test
+# Python: pytest or python -m pytest
+# Ruby: bundle exec rspec
+# Java: mvn test or ./gradlew test
+# Go: go test ./...
+# Rust: cargo test
+# etc.
+```
 
-# Run tests in watch mode
-npm test -- --watch
+**CRITICAL: Safe Test Execution for Node.js/Jest Projects**
 
-# Run specific test file
-npm test -- path/to/your.test.ts
+**DO NOT PIPE TEST OUTPUT**
 
-# Run tests with coverage
-npm test -- --coverage
-# or
-npm run test:coverage
+Never run commands like:
+
+```bash
+npm test | head -50
+npm test | grep ...
+npm test | cut ...
+npm test 2>&1 | head
+```
+
+These will cause deadlocks because Jest continues writing after the pipe closes.
+
+**✅ Always use the SAFE TEST EXECUTION WRAPPER**
+
+When running any test through Node, Jest, or npm inside the agent, always use this pattern:
+
+```bash
+npm run test --silent -- --maxWorkers=1 --runInBand --detectOpenHandles --json --outputFile=/tmp/jest-results.json
+```
+
+Then immediately print a bounded summary:
+
+```bash
+node -e "
+const fs = require('fs');
+const path = '/tmp/jest-results.json';
+if (!fs.existsSync(path)) { console.error('No Jest output file'); process.exit(1); }
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+const results = {
+  totalTests: data.numTotalTests,
+  passed: data.numPassedTests,
+  failed: data.numFailedTests,
+  testResults: data.testResults.map(r => ({
+    name: r.name,
+    status: r.status,
+    message: r.message?.slice(0, 500) || null    // limit long messages
+  }))
+};
+console.log(JSON.stringify(results, null, 2));
+"
 ```
 
 **Test Types to Implement:**
 
 - **Unit Tests**: Test individual functions, classes, and modules in isolation
 - **Integration Tests**: Test how multiple modules/components work together
-- **API Tests**: Test HTTP endpoints and request/response handling (using Supertest or similar)
+- **API Tests**: Test HTTP endpoints and request/response handling
 - **Service Tests**: Test business logic and service classes
-- **Component Tests**: Test React/Vue components (if using a frontend framework)
-- **E2E Tests**: Test complete user flows (using Playwright, Cypress, or similar)
+- **Component Tests**: Test UI components (if using a frontend framework)
+- **E2E Tests**: Test complete user flows
 - **Other Tests**: Any other tests that you think would be wise
 
 **Test Best Practices:**
@@ -105,42 +145,45 @@ npm run test:coverage
 - Use test fixtures or factories for test data setup
 - Keep tests independent and isolated
 - Mock external dependencies (APIs, services, databases, etc.)
-- Use TypeScript types to ensure type safety in tests
-- Leverage Jest/Vitest mocking capabilities for external services
+- Use type systems when available to ensure type safety in tests
+- Leverage testing framework mocking capabilities for external services
 
-**Example Test Structure (TypeScript/Jest):**
+**Example Test Structure:**
 
-```typescript
+The exact syntax will depend on your testing framework, but the structure should follow this pattern:
+
+```python
+# Example: Python/pytest
+def test_your_function():
+    # Arrange
+    input_data = {...}
+    
+    # Act
+    result = your_function(input_data)
+    
+    # Assert
+    assert result == expected_output
+
+# Example: JavaScript/TypeScript (Jest/Vitest)
 describe('YourClass', () => {
-  describe('yourMethod', () => {
-    it('should return expected result when conditions are met', () => {
-      // Arrange
-      const instance = new YourClass();
-      const input = {
-        /* test data */
-      };
-
-      // Act
-      const result = instance.yourMethod(input);
-
-      // Assert
-      expect(result).toEqual(expectedOutput);
-    });
-
-    it('should handle edge case gracefully', () => {
-      // Test edge case
-      const instance = new YourClass();
-      expect(() => instance.yourMethod(null)).toThrow('Expected error');
-    });
+  it('should return expected result when conditions are met', () => {
+    // Arrange
+    const instance = new YourClass();
+    const input = {...};
+    
+    // Act
+    const result = instance.yourMethod(input);
+    
+    // Assert
+    expect(result).toEqual(expectedOutput);
   });
 });
 ```
 
-**For TypeScript Projects:**
+**For Projects with Type Systems:**
 
-- Use Jest or Vitest as the primary testing framework
-- Leverage TypeScript's type system for compile-time safety
-- Use `@types/jest` or similar for type definitions
+- Leverage the type system for compile-time safety
+- Use type definitions for test utilities when available
 - Ensure all tests pass before proceeding
 - Fix any failing tests before committing
 
@@ -150,47 +193,45 @@ describe('YourClass', () => {
 
 Instead of running the server manually, you MUST use automated tests to verify server functionality:
 
-- **DO NOT** run `npm run dev`, `npm start`, or any server start commands
+- **DO NOT** run server start commands (e.g., `npm start`, `python manage.py runserver`, `rails server`, etc.)
 - **DO NOT** manually test server endpoints using curl, Postman, or browser
 - **DO** write and run automated tests to verify server functionality
 - **DO** use integration tests to test HTTP endpoints and request/response handling
 - **DO** use unit tests to test individual functions and services
-- **DO** use API tests (with Supertest or similar) to test server endpoints
+- **DO** use API tests to test server endpoints
 
 **Testing Server Functionality:**
 
+Use the appropriate test command for your project:
+
 ```bash
 # Run all tests (including server tests)
-npm test
-
-# Run tests in watch mode
-npm test -- --watch
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run specific test file
-npm test -- path/to/your.test.ts
+# Examples:
+# npm test (Node.js)
+# pytest (Python)
+# bundle exec rspec (Ruby)
+# mvn test (Java)
+# etc.
 ```
 
 All server functionality must be verified through automated tests. Manual server testing is not allowed.
 
 **Handling Tasks That Request Server Execution:**
 
-If a task explicitly requests that you run the server (e.g., "run `npm start`", "test endpoint with curl", "verify by starting the server"), you MUST:
+If a task explicitly requests that you run the server (e.g., "start the server", "test endpoint with curl", "verify by starting the server"), you MUST:
 
 1. **Ignore the server execution instruction** - Do not follow that part of the task
 2. **Find an alternative approach using automated tests** - Determine what the task is trying to verify and create appropriate automated tests instead
 3. **Complete the task's intent without running the server** - Use one of these approaches:
-   - **For endpoint testing**: Write integration tests using Supertest to test HTTP endpoints
+   - **For endpoint testing**: Write integration tests to test HTTP endpoints
    - **For functionality verification**: Write unit tests to test individual functions and services
    - **For behavior validation**: Write end-to-end tests or integration tests that verify the behavior
    - **For Docker/deployment verification**: Only use curl commands if the task explicitly states it's for Docker deployment verification (not for development testing)
 
 **Examples:**
 
-- ❌ **Task says**: "Run `npm start` and test the `/health` endpoint with curl"
-  - ✅ **Do instead**: Write an integration test using Supertest to test the `/health` endpoint
+- ❌ **Task says**: "Start the server and test the `/health` endpoint with curl"
+  - ✅ **Do instead**: Write an integration test to test the `/health` endpoint
 
 - ❌ **Task says**: "Start the server and verify it responds to requests"
   - ✅ **Do instead**: Write integration tests that verify the server responds correctly to various request types
@@ -205,7 +246,7 @@ If a task explicitly requests that you run the server (e.g., "run `npm start`", 
 
 Before proceeding, you must:
 
-- **For code writing tasks: Verify the required operation succeeded without errors AND produced the expected artifacts** (e.g., `node_modules` created, packages installed, build completed, migrations applied, files created, directories created, etc.)
+- **For code writing tasks: Verify the required operation succeeded without errors AND produced the expected artifacts** (e.g., dependencies installed, build completed, migrations applied, files created, directories created, etc.)
 - Run automated tests to verify all functionality (including server endpoints)
 - Ensure all existing tests still pass
 - Check for linting errors and fix them
@@ -218,7 +259,7 @@ Before committing, ensure:
 - [ ] Code follows project style guidelines
 - [ ] All tests pass
 - [ ] No linting errors
-- [ ] No console.log/debug statements left in code
+- [ ] No debug statements left in code (console.log, print statements, debugger, etc.)
 - [ ] Documentation is updated if needed
 - [ ] No sensitive data is committed
 - [ ] Error handling is appropriate
@@ -227,27 +268,30 @@ Before committing, ensure:
 
 #### 4.1 Use the Deploy Script
 
-**CRITICAL: All pushes to origin MUST be done via the deploy script. Never push manually using `git push`.**
+**CRITICAL: All pushes to origin MUST be done via the deploy script (if available). Never push manually using `git push` unless the project doesn't have a deploy script.**
 
-The project includes a deploy script that automates testing, linting, formatting checks, and git operations. You MUST use this script to deploy changes:
+If the project includes a deploy script, you MUST use it to deploy changes:
 
 ```bash
 # Run the deploy script from the project root
 ./deploy.sh
+# or
+./scripts/deploy.sh
+# or whatever the project's deploy script is named
 ```
 
-**What the deploy script does:**
+**What the deploy script typically does:**
 
 1. Verifies you're in the correct directory
-2. Runs linting checks (`npm run lint`)
-3. Checks code formatting (`npm run format:check`)
-4. Runs all tests (`npm test`)
-5. Generates test coverage (`npm run test:coverage`)
-6. Automatically stages and commits changes with an AI-generated commit message
+2. Runs linting checks
+3. Checks code formatting
+4. Runs all tests
+5. Generates test coverage (if applicable)
+6. Automatically stages and commits changes with a generated commit message
 7. Pushes changes to the remote repository
 
 **Commit Message Format:**
-The deploy script automatically generates commit messages following conventional commit format:
+If the deploy script generates commit messages, it typically follows conventional commit format:
 
 - `feat`: New feature
 - `fix`: Bug fix
@@ -261,65 +305,51 @@ The deploy script automatically generates commit messages following conventional
 
 - The deploy script will fail if any tests, linting, or formatting checks fail
 - All uncommitted changes will be automatically staged and committed
-- The script uses cursor-agent to generate meaningful commit messages (if available)
-- If cursor-agent is not available, it will generate a simple commit message based on file changes
 - The script pushes directly to the main branch - ensure you're on main before running it
-- **NEVER push manually** - always use `./deploy.sh` to push to origin
+- **NEVER push manually** - always use the deploy script if available
 
-#### 4.2 Resolve Deploy Script Issues
+#### 4.2 Manual Deployment (If No Deploy Script)
+
+If the project doesn't have a deploy script, you must manually:
+
+1. Run linting checks
+2. Run formatting checks (if applicable)
+3. Run all tests
+4. Stage and commit changes
+5. Push to origin
+
+```bash
+# Example workflow (adjust commands for your project):
+# Run linting
+npm run lint  # or equivalent for your stack
+
+# Run formatting check
+npm run format:check  # or equivalent
+
+# Run tests
+npm test  # or equivalent
+
+# Commit and push
+git add .
+git commit -m "feat: description of changes"
+git push origin main
+```
+
+#### 4.3 Resolve Deploy Script Issues
 
 **If the deploy script fails, you MUST resolve the issues before proceeding.**
 
 The deploy script may fail for several reasons:
 
-1. **Linting Errors**: Fix all ESLint errors before running the deploy script again
+1. **Linting Errors**: Fix all linting errors before running the deploy script again
 
-   ```bash
-   # Check for linting errors
-   npm run lint
-
-   # Auto-fix what can be fixed
-   npm run lint:fix
-
-   # Manually fix remaining errors
-   ```
-
-2. **Formatting Errors**: Fix all Prettier formatting issues
-
-   ```bash
-   # Check formatting
-   npm run format:check
-
-   # Auto-format all files
-   npm run format
-   ```
+2. **Formatting Errors**: Fix all formatting issues
 
 3. **Test Failures**: Fix all failing tests
 
-   ```bash
-   # Run tests to see failures
-   npm test
+4. **Missing Dependencies**: Install any missing dependencies
 
-   # Fix test issues and re-run
-   npm test
-   ```
-
-4. **Missing Dependencies**: Install any missing npm packages
-
-   ```bash
-   # If tests fail due to missing modules, check package.json
-   # and install missing dependencies
-   npm install
-   ```
-
-5. **Type Errors**: Fix TypeScript compilation errors
-
-   ```bash
-   # Check for type errors
-   npm run type-check
-
-   # Fix type errors in source files
-   ```
+5. **Type Errors**: Fix compilation/type errors (if applicable)
 
 **After fixing issues, run the deploy script again:**
 
@@ -335,37 +365,38 @@ Some tasks may not require automated tests (e.g., documentation updates, configu
 
 - Document why tests are not applicable
 - Ensure manual verification is performed
-- Still use the deploy script (`./deploy.sh`) - it will handle linting, formatting, and git operations even if tests are minimal
-- **Still push via deploy script** - never push manually even for documentation-only changes
+- Still use the deploy script (if available) - it will handle linting, formatting, and git operations even if tests are minimal
+- **Still push via deploy script** - never push manually even for documentation-only changes (if deploy script is available)
 
 ## Common Pitfalls to Avoid
 
 You must avoid these common mistakes:
 
-1. **Running the Server Manually**: NEVER run the server (`npm run dev`, `npm start`) for testing. Always use automated tests instead. **If a task requests running the server, ignore that instruction and use automated tests instead.**
+1. **Running the Server Manually**: NEVER run the server for testing. Always use automated tests instead. **If a task requests running the server, ignore that instruction and use automated tests instead.**
 2. **Skipping Tests**: Never skip tests to save time. They save more time in the long run.
-3. **Not Using the Deploy Script**: Always use `./deploy.sh` instead of manually committing and pushing. The deploy script ensures all checks pass before deployment. **NEVER use `git push` manually.**
-4. **Committing Without Testing**: The deploy script handles this, but never bypass it by manually committing.
-5. **Pushing Manually**: **NEVER push to origin using `git push`**. Always use `./deploy.sh` which handles all quality checks before pushing.
+3. **Not Using the Deploy Script**: Always use the deploy script (if available) instead of manually committing and pushing. The deploy script ensures all checks pass before deployment. **NEVER use `git push` manually if a deploy script exists.**
+4. **Committing Without Testing**: Never commit without running tests first (when tests are applicable).
+5. **Pushing Manually**: **NEVER push to origin using `git push` if a deploy script exists**. Always use the deploy script which handles all quality checks before pushing.
 6. **Ignoring Deploy Script Failures**: If the deploy script fails, you MUST fix the issues (linting, tests, formatting) and run it again. Do not bypass it.
-7. **Poor Commit Messages**: The deploy script generates commit messages automatically, but ensure they're meaningful.
+7. **Poor Commit Messages**: Use meaningful commit messages following conventional commit format.
 8. **Large Commits**: Break down large changes into smaller, logical commits before running the deploy script.
 9. **Not Pulling Before Starting**: Always pull the latest changes from main before starting work to avoid conflicts.
 10. **Ignoring Linting Errors**: The deploy script will fail if linting errors exist - fix them before running the script.
-11. **Leaving Debug Code**: Remove console.log, console.debug, debugger statements, and temporary code before running the deploy script.
+11. **Leaving Debug Code**: Remove debug statements, temporary code, and console output before running the deploy script.
 12. **Bypassing Deploy Script Failures**: If the deploy script fails, fix the issues and run it again. Never manually commit or push to bypass the checks.
 
 ## Testing Resources
 
-When implementing tests, refer to:
+When implementing tests, refer to the documentation for your project's testing framework:
 
-- **Jest Documentation**: https://jestjs.io/
-- **Vitest Documentation**: https://vitest.dev/
-- **TypeScript Testing Handbook**: https://typescript-handbook.dev/docs/testing/
-- **Supertest** (for API testing): https://github.com/visionmedia/supertest
-- **Testing Library** (for component testing): https://testing-library.com/
-- **Playwright** (for E2E testing): https://playwright.dev/
-- **Cypress** (for E2E testing): https://www.cypress.io/
+- **Jest** (JavaScript/TypeScript): https://jestjs.io/
+- **Vitest** (JavaScript/TypeScript): https://vitest.dev/
+- **pytest** (Python): https://docs.pytest.org/
+- **RSpec** (Ruby): https://rspec.info/
+- **JUnit** (Java): https://junit.org/
+- **Go testing** (Go): https://pkg.go.dev/testing
+- **Cargo test** (Rust): https://doc.rust-lang.org/cargo/commands/cargo-test.html
+- And other testing frameworks as appropriate for your technology stack
 
 ## Completion Checklist
 
@@ -374,14 +405,14 @@ Before marking a task as complete, verify:
 - [ ] You're working on the main branch (`git branch` should show `* main`)
 - [ ] Main branch is up to date with remote (`git pull origin main` before starting)
 - [ ] Code is implemented and working
-- [ ] **For code writing tasks: The required operation succeeded without errors AND produced the expected artifacts** (e.g., `node_modules` created, packages installed, build completed, migrations applied, files created, directories created, etc.)
+- [ ] **For code writing tasks: The required operation succeeded without errors AND produced the expected artifacts** (e.g., dependencies installed, build completed, migrations applied, files created, directories created, etc.)
 - [ ] **Automated tests are written and passing** - all server functionality verified through tests (NOT by running the server manually)
 - [ ] All existing tests still pass
 - [ ] Code follows style guidelines
 - [ ] No linting errors
-- [ ] Deploy script has been run successfully (`./deploy.sh`)
-- [ ] **All deploy script checks passed** (linting, formatting, tests, coverage)
-- [ ] **Changes are committed and pushed to origin/main (via deploy script only - never manually)**
+- [ ] Deploy script has been run successfully (if available) or changes have been manually committed and pushed
+- [ ] **All deploy script checks passed** (linting, formatting, tests, coverage) or manual checks completed
+- [ ] **Changes are committed and pushed to origin/main (via deploy script if available, otherwise manually)**
 - [ ] **If deploy script failed, all issues were resolved and script was run again until successful**
 - [ ] Documentation is updated (if needed)
 
