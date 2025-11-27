@@ -1,1 +1,4 @@
+Ok, now go through the @master-plan.md  file and build an execution-order.md file which is a list of execution steps of the plan in order. Make the steps as granular as possible such that an AI agent could write the python app iteratively with automated tests. Use the Task Layoud.md file as a template. Make sure to have a strong definition of done for each task including user stories, automated tests, and code commited with a strong commit message and pushed to origin
+
 Using the Software Developer instructions in the agents folder, iterate through each task in order and implement the task. There should be at least one git commit for each task. After each git commit, push to origin. Be sure to write automated tests and to run them before making each commit. Follow the safe testing practices in the Software Developer instructions to avoid tests hanging. Complete all tasks without checking in. 
+
