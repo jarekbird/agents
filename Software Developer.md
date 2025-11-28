@@ -59,12 +59,17 @@ When writing code, you must:
 
 #### 3.2 Implement Automated Tests (When Applicable)
 
+> ⚠️ **CRITICAL WARNING: Never Pipe Test Output**
+> 
+> **DO NOT** pipe test output from Node.js test runners (Jest, Vitest, etc.). Piping causes deadlocks because test runners continue writing after the pipe closes. Always use JSON output files instead.
+
 **Testing Requirements:**
 You MUST write tests BEFORE or ALONGSIDE implementation (TDD/BDD approach preferred):
 
 - All new features must have corresponding tests
 - Bug fixes must include tests that verify the fix
 - Aim for high test coverage (minimum 80% for new code)
+- **Never pipe test output — use JSON output files instead**
 
 **Running Tests:**
 
@@ -81,24 +86,30 @@ Use the appropriate test command for your project's technology stack:
 # etc.
 ```
 
-**CRITICAL: Safe Test Execution for Node.js/Jest Projects**
+**CRITICAL: Safe Test Execution for Node.js Test Runners (Jest, Vitest, etc.)**
 
 **DO NOT PIPE TEST OUTPUT**
 
 Never run commands like:
 
 ```bash
+# ❌ FORBIDDEN: These will cause deadlocks
 npm test | head -50
 npm test | grep ...
 npm test | cut ...
 npm test 2>&1 | head
+npm run test -- --run 2>&1 | head
+npm test -- --run | grep ...
+# Any command with | after a test command
 ```
 
-These will cause deadlocks because Jest continues writing after the pipe closes.
+These will cause deadlocks because Jest/Vitest continues writing after the pipe closes.
 
 **✅ Always use the SAFE TEST EXECUTION WRAPPER**
 
-When running any test through Node, Jest, or npm inside the agent, always use this pattern:
+**For Jest Projects:**
+
+When running Jest tests inside the agent, always use this pattern:
 
 ```bash
 npm run test --silent -- --maxWorkers=1 --runInBand --detectOpenHandles --json --outputFile=/tmp/jest-results.json
@@ -120,6 +131,36 @@ const results = {
     name: r.name,
     status: r.status,
     message: r.message?.slice(0, 500) || null    // limit long messages
+  }))
+};
+console.log(JSON.stringify(results, null, 2));
+"
+```
+
+**For Vitest Projects:**
+
+When running Vitest tests inside the agent, always use this pattern:
+
+```bash
+npm run test -- --run --reporter=json --outputFile=/tmp/vitest-results.json
+```
+
+Then immediately print a bounded summary:
+
+```bash
+node -e "
+const fs = require('fs');
+const path = '/tmp/vitest-results.json';
+if (!fs.existsSync(path)) { console.error('No Vitest output file'); process.exit(1); }
+const data = JSON.parse(fs.readFileSync(path, 'utf8'));
+const results = {
+  totalTests: data.numTotalTestSuites || data.numTotalTests || 0,
+  passed: data.numPassedTestSuites || data.numPassedTests || 0,
+  failed: data.numFailedTestSuites || data.numFailedTests || 0,
+  testResults: (data.testResults || []).map(r => ({
+    name: r.name || r.file || 'unknown',
+    status: r.status || (r.numFailingTests === 0 ? 'passed' : 'failed'),
+    message: r.message?.slice(0, 500) || null
   }))
 };
 console.log(JSON.stringify(results, null, 2));
@@ -425,6 +466,7 @@ Before committing, ensure:
 
 - [ ] Code follows project style guidelines
 - [ ] All tests pass
+- [ ] **Never pipe test output — use JSON output files instead**
 - [ ] No linting errors
 - [ ] No debug statements left in code (console.log, print statements, debugger, etc.)
 - [ ] Documentation is updated if needed
